@@ -19,11 +19,36 @@ export function startBot() {
     ctx.reply(
       "Welcome to the yt-dlp wrapper bot!\n\n" +
       "Usage:\n" +
-      "/dl <arguments>\n\n" +
+      "/dl <arguments>\n" +
+      "/help - Show yt-dlp help\n\n" +
       "Example:\n" +
       "/dl https://youtube.com/watch?v=...\n" +
       "/dl -f bestaudio https://..."
     );
+  });
+
+  bot.command("help", async (ctx) => {
+    const { spawn } = await import('child_process');
+    const YTDLP_PATH = process.env.YTDLP_PATH || 'yt-dlp';
+    
+    await ctx.reply("Fetching help info...");
+    
+    const child = spawn(YTDLP_PATH, ["--help"]);
+    let output = "";
+    
+    child.stdout.on("data", (data) => {
+      output += data.toString();
+    });
+    
+    child.on("close", async () => {
+      // Telegram has a 4096 char limit per message.
+      // We'll send the first part and suggest using a file if it's too long, 
+      // but for simplicity let's just send the most important part or the beginning.
+      // Actually, it's better to send it as a file since it's very long.
+      const helpPath = "/tmp/ytdlp_help.txt";
+      await fs.promises.writeFile(helpPath, output);
+      await ctx.replyWithDocument(new InputFile(helpPath));
+    });
   });
 
   bot.command("dl", async (ctx) => {
