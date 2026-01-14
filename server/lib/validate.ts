@@ -7,13 +7,11 @@ const FORBIDDEN_FLAGS = [
   '--config-location',
   '--paths', '-P',
   '-o', '--output',
-  '--print', '--dump-json',
+  '--print',
   '--cookies-from-browser',
   '--username', '--password', '--netrc',
   '--proxy',
   '--cache-dir',
-  '--write-info-json',
-  '--write-description',
   '--write-thumbnail'
 ];
 

@@ -17,15 +17,12 @@ const TTL_MIN = parseInt(process.env.CLEANUP_TTL_MIN || '30', 10);
 setInterval(() => cleanupDir(TMP_DIR, TTL_MIN), 30 * 60 * 1000);
 
 interface DownloadResult {
-  filePath: string;
-  meta?: string;
+  filePaths: string[];
 }
 
 export function downloadMedia(args: string[]): Promise<DownloadResult> {
   return new Promise((resolve, reject) => {
-    // Unique ID for this download to avoid collisions (though yt-dlp has its own ID)
     // We rely on yt-dlp output template to avoid collisions mainly.
-    // The requirement says: <TMP_DIR>/%(title).120B [%(id)s].%(ext)s
     const template = path.join(TMP_DIR, '%(title).120B [%(id)s].%(ext)s');
 
     const finalArgs = [
@@ -52,13 +49,11 @@ export function downloadMedia(args: string[]): Promise<DownloadResult> {
 
     child.on('close', async (code) => {
       if (code !== 0) {
-        // Try to extract useful error message from stderr
         const errorMsg = stderr.split('\n').find(l => l.includes('ERROR:')) || 'Unknown error occurred';
         reject(new Error(`yt-dlp failed with code ${code}: ${errorMsg}`));
         return;
       }
 
-      // Find the most recently created file in TMP_DIR
       try {
         const files = await fs.promises.readdir(TMP_DIR);
         
@@ -67,29 +62,26 @@ export function downloadMedia(args: string[]): Promise<DownloadResult> {
           return;
         }
 
-        // Filter out .part files and hidden files
-        const candidates = files.filter(f => !f.endsWith('.part') && !f.startsWith('.'));
-        
-        if (candidates.length === 0) {
-          reject(new Error("No valid files found (only .part or hidden)."));
-          return;
-        }
-
-        // Sort by creation time desc
-        const stats = await Promise.all(candidates.map(async f => ({
+        // We look for files created/modified during the last minute in the TMP_DIR
+        const now = Date.now();
+        const stats = await Promise.all(files.map(async f => ({
           file: f,
           stat: await fs.promises.stat(path.join(TMP_DIR, f))
         })));
         
-        stats.sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
-        
-        if (stats.length === 0) {
-           reject(new Error("Could not determine downloaded file."));
-           return;
+        // Filter valid candidates (not .part, created recently)
+        const candidates = stats.filter(s => 
+          !s.file.endsWith('.part') && 
+          !s.file.startsWith('.') &&
+          (now - s.stat.mtimeMs < 60000) // 1 minute window
+        );
+
+        if (candidates.length === 0) {
+          reject(new Error("No valid files found (only .part or hidden or old)."));
+          return;
         }
 
-        const newest = stats[0];
-        resolve({ filePath: path.join(TMP_DIR, newest.file) });
+        resolve({ filePaths: candidates.map(c => path.join(TMP_DIR, c.file)) });
 
       } catch (err) {
         reject(err);

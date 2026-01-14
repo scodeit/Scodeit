@@ -34,7 +34,7 @@ export function startBot() {
     }
 
     const rawArgs = match[1];
-    let filePath: string | null = null;
+    let filePaths: string[] = [];
 
     try {
       const args = parseArgs(rawArgs);
@@ -47,12 +47,14 @@ export function startBot() {
       await ctx.reply("Downloading... This may take a while.");
       
       const result = await downloadMedia(args);
-      filePath = result.filePath;
+      filePaths = result.filePaths;
 
       await ctx.reply("Download complete. Uploading to Telegram...");
 
-      // Send as document
-      await ctx.replyWithDocument(new InputFile(filePath));
+      // Send all files as documents
+      for (const filePath of filePaths) {
+        await ctx.replyWithDocument(new InputFile(filePath));
+      }
 
     } catch (err: any) {
       console.error("Download/Upload error:", err);
@@ -69,7 +71,7 @@ export function startBot() {
       await ctx.reply(message);
     } finally {
       // Always cleanup
-      if (filePath) {
+      for (const filePath of filePaths) {
         await cleanup(filePath);
       }
     }
